@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 
@@ -45,6 +47,16 @@ async def _button_cb(_, cb: CallbackQuery):
     )
 
 
+async def check_duration(chat_id, date_time, cb):
+    duration = (date_time - datetime(1900, 1, 1)).total_seconds()
+    duration_limit = config.DURATION_LIMIT * 60
+    if duration >= duration_limit:
+        return await cb.answer(
+            gm(chat_id, "duration_reach_limit").format(str(timedelta(seconds=duration_limit))),
+            show_alert=True)
+    pass
+
+
 @Client.on_callback_query(filters.regex(pattern=r"((video|music) ((\d)\|(\d+)))"))
 async def _music_or_video(_, cb: CallbackQuery):
     chat_id = cb.message.chat.id
@@ -61,6 +73,15 @@ async def _music_or_video(_, cb: CallbackQuery):
         "yt_id": result["yt_id"],
         "stream_type": stream_type,
     }
+    try:
+        date_time = datetime.strptime(res["duration"], "%H:%M:%S")
+        await check_duration(chat_id, date_time, cb)
+    except ValueError:
+        try:
+            date_time = datetime.strptime(res["duration"], "%M:%S")
+            await check_duration(chat_id, date_time, cb)
+        except ValueError:
+            pass
     await player.music_or_video(cb, res)
 
 
@@ -111,8 +132,8 @@ async def goback(client: Client, hee: CallbackQuery):
 async def cbhelp(_, lol: CallbackQuery):
     match = lol.matches[0].group(1)
     chat_id = lol.message.chat.id
-    user_id = int(lol.matches[0].group(3))
     if match == "cbhelp":
+        user_id = lol.from_user.id
         return await lol.edit_message_text(
             gm(chat_id, "helpmusic"),
             reply_markup=InlineKeyboardMarkup(
@@ -128,6 +149,7 @@ async def cbhelp(_, lol: CallbackQuery):
                 ]
             ),
         )
+    user_id = int(lol.matches[0].group(3))
     if match == f"plug_back|{user_id}":
         from_user_id = lol.from_user.id
         if from_user_id != user_id:
